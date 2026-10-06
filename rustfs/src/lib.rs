@@ -94,6 +94,7 @@ pub mod license;
 pub mod memory_observability;
 pub mod module_switches;
 pub mod on_demand_migration;
+pub mod p2p;
 pub mod profiling;
 #[cfg(any(feature = "ftps", feature = "webdav", feature = "sftp"))]
 pub mod protocols;

@@ -163,6 +163,7 @@ hyper-util = { version = "0.1.21" }
 http = "1.5.0"
 http-body = "1.1.0"
 http-body-util = "0.1.5"
+libp2p = { default-features = false, version = "0.57.0" }
 memchr = "2.8.3"
 minlz = "1.2.3"
 reqwest = "0.13.5"
@@ -368,7 +369,7 @@ unftp-core = "0.1.0"
 suppaftp = { version = "12.1.1" }
 rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs", "crypto", "pem"] }
 russh = { version = "0.63.3" }
-russh-sftp = "3.0.1"
+russh-sftp = "2.0.0"
 
 # WebDAV
 dav-server = "0.11.0"

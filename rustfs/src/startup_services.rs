@@ -47,6 +47,7 @@ pub(crate) struct StartupServiceRuntime {
     pub(crate) heartbeat: Option<HeartbeatRuntime>,
     pub(crate) inventory: Option<InventoryRuntime>,
     pub(crate) local_trace_capture: Option<LocalTraceCaptureRuntime>,
+    pub(crate) p2p_bootstrap: Option<crate::storage::storage_api::ecstore_cluster::ClusterP2pBootstrapSnapshot>,
     pub(crate) iam_bootstrap: IamBootstrapDisposition,
     pub(crate) enable_scanner: bool,
 }
@@ -102,6 +103,9 @@ pub(crate) async fn init_startup_runtime_services(
 
     let buckets = init_bucket_metadata_runtime(store.clone(), ctx.clone()).await?;
     let iam_bootstrap = init_iam_runtime(store.clone(), ctx.clone(), readiness, state_manager, server_ctx).await?;
+    let p2p_bootstrap = Some(crate::storage::storage_api::ecstore_cluster::p2p_bootstrap_snapshot_from_endpoint_pools(
+        &endpoint_pools,
+    ));
 
     // Audit initialization requires the AppContext (server config + object store)
     // which is published by ensure_startup_after_iam inside init_iam_runtime.
@@ -123,6 +127,7 @@ pub(crate) async fn init_startup_runtime_services(
         heartbeat,
         inventory,
         local_trace_capture,
+        p2p_bootstrap,
         iam_bootstrap,
         enable_scanner,
     })

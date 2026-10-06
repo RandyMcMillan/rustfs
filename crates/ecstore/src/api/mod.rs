@@ -341,11 +341,13 @@ pub mod object_api_utils {
 pub mod cluster {
     pub use crate::cluster::{
         ClusterControlPlane, ClusterControlPlaneSnapshot, ClusterDriveMembership, ClusterEndpointType, ClusterLocalNodeStorage,
-        ClusterLocalNodeStorageSnapshot, ClusterMembershipSnapshot, ClusterNodeMembership, ClusterPeerHealth,
-        ClusterPeerHealthSnapshot, ClusterPoolState, ClusterPoolStateSnapshot, ClusterRpcBoundarySnapshot,
-        ClusterRpcChannelSnapshot, ClusterRpcPlane, ClusterRpcTransport, local_node_storage_snapshot_from_membership,
-        membership_snapshot_from_endpoint_pools, peer_health_snapshot_from_membership, pool_state_snapshot_from_endpoint_pools,
-        rpc_boundary_snapshot, topology_snapshot_from_endpoint_pools, topology_snapshot_from_endpoint_pools_with_capabilities,
+        ClusterLocalNodeStorageSnapshot, ClusterMembershipSnapshot, ClusterNodeMembership, ClusterP2pBootstrapPeer,
+        ClusterP2pBootstrapSnapshot, ClusterPeerHealth, ClusterPeerHealthSnapshot, ClusterPoolState, ClusterPoolStateSnapshot,
+        ClusterRpcBoundarySnapshot, ClusterRpcChannelSnapshot, ClusterRpcPlane, ClusterRpcTransport,
+        local_node_storage_snapshot_from_membership, membership_snapshot_from_endpoint_pools,
+        p2p_bootstrap_snapshot_from_endpoint_pools, p2p_bootstrap_snapshot_from_membership, peer_health_snapshot_from_membership,
+        pool_state_snapshot_from_endpoint_pools, rpc_boundary_snapshot, topology_snapshot_from_endpoint_pools,
+        topology_snapshot_from_endpoint_pools_with_capabilities,
     };
 }
 

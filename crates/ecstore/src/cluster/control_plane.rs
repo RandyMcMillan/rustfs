@@ -35,6 +35,9 @@ const PEER_HEALTH_NOT_REPORTED: &str = "peer health not reported by endpoints";
 const PEER_HEALTH_LOCAL_NODE: &str = "local node does not require peer health probing";
 const PEER_HEALTH_REACHABLE: &str = "peer marked reachable by internode health tracker";
 const PEER_HEALTH_UNREACHABLE: &str = "peer marked unreachable by internode health tracker";
+const P2P_BOOTSTRAP_LOCAL_NODE: &str = "local node is not advertised as a bootstrap peer";
+const P2P_BOOTSTRAP_PATH_ENDPOINT: &str = "path endpoints are not advertised as bootstrap peers";
+const P2P_BOOTSTRAP_URL_ENDPOINT: &str = "url endpoints are eligible for bootstrap peer discovery";
 const CONTROL_RPC_SEPARATED: &str = "control RPC remains on the gRPC control plane";
 const DATA_STREAM_RPC_SEPARATED: &str = "remote disk data streams remain on the internode data transport";
 
@@ -161,6 +164,20 @@ pub struct ClusterPeerHealthSnapshot {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClusterPeerHealth {
     pub node_id: String,
+    pub is_local: bool,
+    pub status: CapabilityStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClusterP2pBootstrapSnapshot {
+    pub peers: Vec<ClusterP2pBootstrapPeer>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClusterP2pBootstrapPeer {
+    pub node_id: String,
+    pub grid_host: String,
+    pub endpoint_type: ClusterEndpointType,
     pub is_local: bool,
     pub status: CapabilityStatus,
 }
@@ -360,6 +377,40 @@ fn peer_health_status_for_node(node: &ClusterNodeMembership) -> CapabilityStatus
         Some(false) => CapabilityStatus::unknown().with_reason(PEER_HEALTH_UNREACHABLE),
         None => CapabilityStatus::disabled().with_reason(PEER_HEALTH_NOT_REPORTED),
     }
+}
+
+pub fn p2p_bootstrap_snapshot_from_endpoint_pools(endpoint_pools: &EndpointServerPools) -> ClusterP2pBootstrapSnapshot {
+    p2p_bootstrap_snapshot_from_membership(&membership_snapshot_from_endpoint_pools(endpoint_pools))
+}
+
+pub fn p2p_bootstrap_snapshot_from_membership(membership: &ClusterMembershipSnapshot) -> ClusterP2pBootstrapSnapshot {
+    let mut peers = Vec::new();
+
+    for drive in &membership.drives {
+        let status = if drive.is_local {
+            CapabilityStatus::disabled().with_reason(P2P_BOOTSTRAP_LOCAL_NODE)
+        } else {
+            match drive.endpoint_type {
+                ClusterEndpointType::Path => CapabilityStatus::unknown().with_reason(P2P_BOOTSTRAP_PATH_ENDPOINT),
+                ClusterEndpointType::Url => CapabilityStatus::supported().with_reason(P2P_BOOTSTRAP_URL_ENDPOINT),
+            }
+        };
+
+        peers.push(ClusterP2pBootstrapPeer {
+            node_id: drive.node_id.clone(),
+            grid_host: membership
+                .nodes
+                .iter()
+                .find(|node| node.node_id == drive.node_id)
+                .map(|node| node.grid_host.clone())
+                .unwrap_or_default(),
+            endpoint_type: drive.endpoint_type,
+            is_local: drive.is_local,
+            status,
+        });
+    }
+
+    ClusterP2pBootstrapSnapshot { peers }
 }
 
 pub fn rpc_boundary_snapshot() -> ClusterRpcBoundarySnapshot {
@@ -653,6 +704,83 @@ mod tests {
         assert!(!snapshot.peers[2].status.state.is_supported());
         assert_eq!(snapshot.peers[3].status.reason.as_deref(), Some(PEER_HEALTH_NOT_REPORTED));
         assert_eq!(snapshot.peers[3].status.state, CapabilityState::Disabled);
+    }
+
+    #[test]
+    fn p2p_bootstrap_snapshot_marks_local_and_remote_endpoint_types() {
+        let membership = ClusterMembershipSnapshot {
+            nodes: vec![
+                ClusterNodeMembership {
+                    node_id: LOCAL_NODE_ID.to_string(),
+                    grid_host: String::new(),
+                    is_local: true,
+                    pools: vec![0],
+                },
+                ClusterNodeMembership {
+                    node_id: "path-peer.example:9000".to_string(),
+                    grid_host: "http://path-peer.example:9000".to_string(),
+                    is_local: false,
+                    pools: vec![0],
+                },
+                ClusterNodeMembership {
+                    node_id: "url-peer.example:9000".to_string(),
+                    grid_host: "http://url-peer.example:9000".to_string(),
+                    is_local: false,
+                    pools: vec![0],
+                },
+            ],
+            drives: vec![
+                ClusterDriveMembership {
+                    pool_index: 0,
+                    set_index: 0,
+                    disk_index: 0,
+                    node_id: LOCAL_NODE_ID.to_string(),
+                    is_local: true,
+                    endpoint_type: ClusterEndpointType::Path,
+                },
+                ClusterDriveMembership {
+                    pool_index: 0,
+                    set_index: 0,
+                    disk_index: 1,
+                    node_id: "path-peer.example:9000".to_string(),
+                    is_local: false,
+                    endpoint_type: ClusterEndpointType::Path,
+                },
+                ClusterDriveMembership {
+                    pool_index: 0,
+                    set_index: 1,
+                    disk_index: 0,
+                    node_id: "url-peer.example:9000".to_string(),
+                    is_local: false,
+                    endpoint_type: ClusterEndpointType::Url,
+                },
+            ],
+        };
+
+        let snapshot = p2p_bootstrap_snapshot_from_membership(&membership);
+
+        assert_eq!(snapshot.peers.len(), 3);
+        assert_eq!(snapshot.peers[0].node_id, LOCAL_NODE_ID);
+        assert!(snapshot.peers[0].is_local);
+        assert_eq!(snapshot.peers[0].grid_host, "");
+        assert_eq!(snapshot.peers[0].endpoint_type, ClusterEndpointType::Path);
+        assert_eq!(snapshot.peers[0].status.reason.as_deref(), Some(P2P_BOOTSTRAP_LOCAL_NODE));
+        assert_eq!(snapshot.peers[0].status.state, CapabilityState::Disabled);
+        assert_eq!(snapshot.peers[1].status.reason.as_deref(), Some(P2P_BOOTSTRAP_PATH_ENDPOINT));
+        assert_eq!(snapshot.peers[1].status.state, CapabilityState::Unknown);
+        assert_eq!(snapshot.peers[2].status.reason.as_deref(), Some(P2P_BOOTSTRAP_URL_ENDPOINT));
+        assert!(snapshot.peers[2].status.state.is_supported());
+    }
+
+    #[test]
+    fn p2p_bootstrap_snapshot_from_endpoint_pools_matches_membership_snapshot() {
+        let endpoint_pools = sample_mixed_endpoint_pools();
+        let membership = membership_snapshot_from_endpoint_pools(&endpoint_pools);
+
+        assert_eq!(
+            p2p_bootstrap_snapshot_from_endpoint_pools(&endpoint_pools),
+            p2p_bootstrap_snapshot_from_membership(&membership)
+        );
     }
 
     #[test]

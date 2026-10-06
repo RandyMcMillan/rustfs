@@ -445,9 +445,11 @@ pub(crate) mod ecstore_compression {
 pub(crate) mod ecstore_cluster {
     pub(crate) use rustfs_ecstore::api::cluster::{
         ClusterControlPlane, ClusterControlPlaneSnapshot, ClusterDriveMembership, ClusterEndpointType, ClusterLocalNodeStorage,
-        ClusterLocalNodeStorageSnapshot, ClusterMembershipSnapshot, ClusterNodeMembership, ClusterPeerHealth,
-        ClusterPeerHealthSnapshot, ClusterPoolState, ClusterPoolStateSnapshot, ClusterRpcBoundarySnapshot,
-        ClusterRpcChannelSnapshot, ClusterRpcPlane, ClusterRpcTransport, topology_snapshot_from_endpoint_pools_with_capabilities,
+        ClusterLocalNodeStorageSnapshot, ClusterMembershipSnapshot, ClusterNodeMembership, ClusterP2pBootstrapPeer,
+        ClusterP2pBootstrapSnapshot, ClusterPeerHealth, ClusterPeerHealthSnapshot, ClusterPoolState, ClusterPoolStateSnapshot,
+        ClusterRpcBoundarySnapshot, ClusterRpcChannelSnapshot, ClusterRpcPlane, ClusterRpcTransport,
+        p2p_bootstrap_snapshot_from_endpoint_pools, p2p_bootstrap_snapshot_from_membership,
+        topology_snapshot_from_endpoint_pools_with_capabilities,
     };
 }
 

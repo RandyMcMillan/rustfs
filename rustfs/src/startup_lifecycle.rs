@@ -134,6 +134,7 @@ pub(crate) async fn run_startup_runtime_lifecycle(lifecycle: StartupRuntimeLifec
         heartbeat,
         inventory,
         local_trace_capture,
+        p2p_bootstrap,
         iam_bootstrap,
         enable_scanner,
     } = service_runtime;
@@ -145,6 +146,7 @@ pub(crate) async fn run_startup_runtime_lifecycle(lifecycle: StartupRuntimeLifec
         subsystem = LOG_SUBSYSTEM_STARTUP,
         version = %crate::version::get_version(),
         server_address = %server_address,
+        p2p_bootstrap_peer_count = p2p_bootstrap.as_ref().map_or(0, |snapshot| snapshot.peers.len()),
         started_at = %jiff::Zoned::now(),
         iam_bootstrap = ?iam_bootstrap,
         "RustFS server ready"

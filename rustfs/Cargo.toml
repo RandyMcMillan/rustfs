@@ -59,6 +59,7 @@ required-features = ["swift"]
 [features]
 default = ["ftps", "webdav", "gcs"]
 gcs = ["rustfs-ecstore/gcs", "dep:google-cloud-auth"]
+p2p = ["dep:libp2p"]
 metrics-gpu = ["rustfs-obs/gpu"]
 ftps = ["rustfs-protocols/ftps"]
 swift = ["rustfs-protocols/swift"]
@@ -300,6 +301,7 @@ tokio-util = { workspace = true, features = ["io", "compat", "time"] }
 tonic = { workspace = true, features = ["gzip", "deflate"] }
 tower = { workspace = true, features = ["timeout"] }
 tower-http = { workspace = true, features = ["trace", "compression-full", "cors", "catch-panic", "timeout", "limit", "request-id", "add-extension"] }
+libp2p = { workspace = true, optional = true }
 
 # Serialization and Data Formats
 apache-avro = { workspace = true }

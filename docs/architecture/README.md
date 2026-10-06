@@ -42,6 +42,7 @@ Required headings and strings in these files are asserted by `scripts/check_arch
 | [decommission-compatibility.md](decommission-compatibility.md) | changing pool decommission or rebalance behavior, its admin API shape, the persisted `PoolMeta` fields, or how tier free versions move between pools |
 | [ecstore-layout-boundary.md](ecstore-layout-boundary.md) | touching endpoint expansion, `FormatV3`, pool/set layout, or moving files between ECStore's internal directories |
 | [runtime-capability-contracts.md](runtime-capability-contracts.md) | changing the read-only observability or topology snapshot contracts in `rustfs-storage-api`, their providers, or the `storage_classes` payload of `GET /rustfs/admin/v4/runtime/capabilities` |
+| [p2p-networking-model.md](p2p-networking-model.md) | changing the hybrid p2p bootstrap path, peer identity/address primitives, or the startup/runtime boundary for the decentralized networking layer |
 | [workload-admission-contracts.md](workload-admission-contracts.md) | adding a workload class or snapshot provider, or consuming admission state from a background job |
 | [background-controller-contract.md](background-controller-contract.md) | adding a status snapshot or reconcile surface for a background service, or being tempted to fold several services into a generic controller |
 | [background-services-inventory.md](background-services-inventory.md) | you need one audited background service's desired source, current-status inputs, status surface, and declared side effects |
