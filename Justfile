@@ -256,3 +256,32 @@ probe-e2e:
 docker-inspect-multiarch image cli=(DOCKER_CLI):
     @echo "🔍 Inspecting multi-architecture image: {{ image }}"
     {{ cli }} buildx imagetools inspect {{ image }}
+
+# ========================================================================================
+# Local CI with act
+# ========================================================================================
+
+ACT_PLATFORM_MAP := "-P sm-standard-2=ubuntu-latest -P sm-standard-4=ubuntu-latest -P sm-standard-4-arm=ubuntu-latest -P dind-sm-standard-2=ubuntu-latest -P smoke-testing=ubuntu-latest -P pf-testing=ubuntu-latest"
+
+[doc("run act with self-hosted runner mappings (pass extra args after --)")]
+[group("🎭 Act")]
+act *args:
+    act {{ ACT_PLATFORM_MAP }} {{ args }}
+
+[doc("run CI locally with act")]
+[group("🎭 Act")]
+act-ci:
+    @echo "🎭 Running CI locally with act..."
+    act push {{ ACT_PLATFORM_MAP }} -W .github/workflows/ci.yml
+
+[doc("run cache-warm locally with act")]
+[group("🎭 Act")]
+act-cache-warm:
+    @echo "🎭 Running cache-warm locally with act..."
+    act push {{ ACT_PLATFORM_MAP }} -W .github/workflows/cache-warm.yml
+
+[doc("run only the Warm ci-uring job locally")]
+[group("🎭 Act")]
+act-warm-ci-uring:
+    @echo "🎭 Running Warm ci-uring job locally with act..."
+    act push {{ ACT_PLATFORM_MAP }} -j warm-ci-uring
