@@ -197,6 +197,62 @@ ensure_file_descriptor_limit() {
     fi
 }
 
+# Ensure build-time code generators used by workspace dependencies are present.
+ensure_codegen_tools() {
+    local missing_tools=()
+
+    command -v protoc &> /dev/null || missing_tools+=("protobuf")
+    command -v flatc &> /dev/null || missing_tools+=("flatbuffers")
+
+    if [ "${#missing_tools[@]}" -eq 0 ]; then
+        return 0
+    fi
+
+    local os
+    os=$(uname -s | tr '[:upper:]' '[:lower:]')
+
+    case "$os" in
+        "darwin")
+            if ! command -v brew &> /dev/null; then
+                print_message $RED "❌ Missing build tools: ${missing_tools[*]}"
+                print_message $YELLOW "💡 Install them with Homebrew: brew install protobuf flatbuffers"
+                return 1
+            fi
+
+            print_message $YELLOW "🔧 Installing missing build tools: ${missing_tools[*]}"
+            brew install "${missing_tools[@]}"
+            ;;
+        "linux")
+            local apt_packages=()
+
+            command -v protoc &> /dev/null || apt_packages+=("protobuf-compiler")
+            command -v flatc &> /dev/null || apt_packages+=("flatbuffers-compiler")
+
+            if [ "${#apt_packages[@]}" -eq 0 ]; then
+                return 0
+            fi
+
+            print_message $YELLOW "🔧 Installing missing build tools: ${apt_packages[*]}"
+            if [ "$(id -u)" -eq 0 ]; then
+                apt-get update
+                apt-get install -y "${apt_packages[@]}"
+            elif command -v sudo &> /dev/null; then
+                sudo apt-get update
+                sudo apt-get install -y "${apt_packages[@]}"
+            else
+                print_message $RED "❌ Missing build tools: ${apt_packages[*]}"
+                print_message $YELLOW "💡 Install them with your package manager: ${apt_packages[*]}"
+                return 1
+            fi
+            ;;
+        *)
+            print_message $RED "❌ Missing build tools: ${missing_tools[*]}"
+            print_message $YELLOW "💡 Install protoc and flatc before building."
+            return 1
+            ;;
+    esac
+}
+
 # Get version from git
 get_version() {
     if git describe --abbrev=0 --tags >/dev/null 2>&1; then
@@ -213,6 +269,8 @@ setup_rust_environment() {
     # Install required target for current platform
     print_message $YELLOW "Installing target: $PLATFORM"
     rustup target add "$PLATFORM"
+
+    ensure_codegen_tools
 
     # Set up environment variables for musl targets
     if [[ "$PLATFORM" == *"musl"* ]]; then
