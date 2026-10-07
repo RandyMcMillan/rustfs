@@ -37,6 +37,7 @@ use crate::{
 use rustfs_common::GlobalReadiness;
 use std::{collections::BTreeSet, io::Result, sync::Arc};
 use tokio_util::sync::CancellationToken;
+#[cfg(feature = "p2p")]
 use uuid::Uuid;
 
 const EVENT_DRIVE_UNAVAILABLE: &str = "drive_unavailable";
