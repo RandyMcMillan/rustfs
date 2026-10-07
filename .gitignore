@@ -90,3 +90,5 @@ worktrees/*
 # insta scratch files; the accepted .snap files ARE the assertions and are committed
 *.snap.new
 *.pending-snap
+
+*@*.html
