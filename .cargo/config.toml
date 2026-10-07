@@ -33,3 +33,6 @@
 # For CPU profiling, add `-C force-frame-pointers=yes` to that RUSTFLAGS value.
 [build]
 target-dir = "./target"
+[alias]
+chk = "check --target-dir ./target/check"
+tst = "test --target-dir ./target/test"

@@ -6,7 +6,8 @@ RustFS currently treats libp2p as an extension point, not a replacement. The net
 
 The current rollout keeps the existing transport stack intact:
 
-- peer discovery can be seeded from endpoint membership or explicit bootstrap peers;
+- peer discovery can be seeded from endpoint membership, explicit bootstrap peers, or the default public IPFS/libp2p bootstrap peers;
+- if P2P is enabled and neither static peers nor a rendezvous namespace are supplied, the default IPFS bootstrap list in `rustfs/src/p2p/mod.rs::DEFAULT_P2P_STATIC_PEERS` is used;
 - local nodes are not advertised as bootstrap peers;
 - path endpoints remain control-plane membership data, while URL endpoints are the eligible bootstrap addresses;
 - the HTTP/gRPC internode paths remain the fallback until the p2p layer is proven stable enough to narrow or replace them.

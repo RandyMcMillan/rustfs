@@ -316,7 +316,7 @@ impl Config {
         // Region is optional, but if not set, we should default to "us-east-1" for signing compatibility with AWS S3 clients
         let region = region.or_else(|| Some(RUSTFS_REGION.to_string()));
 
-        let p2p = P2pStartupConfig {
+        let mut p2p = P2pStartupConfig {
             enabled: p2p_enabled,
             node_name: p2p_node_name,
             peer_id: p2p_peer_id,
@@ -325,6 +325,9 @@ impl Config {
             retry_interval_secs: p2p_retry_interval_secs,
             max_bootstrap_peers: p2p_max_bootstrap_peers,
         };
+        if p2p.enabled && p2p.static_peers.is_empty() && p2p.rendezvous_namespace.is_none() {
+            p2p.static_peers = crate::p2p::default_p2p_static_peers();
+        }
         p2p.validate()?;
 
         Ok(Config {

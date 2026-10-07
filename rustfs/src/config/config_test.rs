@@ -967,6 +967,25 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_p2p_enabled_without_peers_uses_default_bootstraps() {
+        let args = vec![
+            "rustfs",
+            "/data/vol1",
+            "--p2p-enabled",
+            "--p2p-node-name",
+            "node-a",
+            "--p2p-peer-id",
+            "12D3KooWHybridPeerIdentityExample",
+        ];
+        let config = Config::from_opt(Opt::parse_from(args)).expect("config should parse");
+
+        assert!(config.p2p.enabled);
+        assert!(!config.p2p.static_peers.is_empty());
+        assert_eq!(config.p2p.static_peers, crate::p2p::default_p2p_static_peers());
+    }
+
+    #[test]
+    #[serial]
     fn test_p2p_static_peers_env() {
         temp_env::with_vars(
             [

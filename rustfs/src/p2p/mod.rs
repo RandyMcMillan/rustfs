@@ -14,7 +14,26 @@ use uuid::Uuid;
 const MAX_NODE_NAME_LEN: usize = 253;
 const MAX_PEER_ID_LEN: usize = 128;
 const MAX_PEER_ADDRESS_LEN: usize = 1024;
-const MIN_MULTIADDR_COMPONENTS: usize = 6;
+
+/// Default static bootstrap peers for the public IPFS/libp2p bootstrap network.
+///
+/// These are used when P2P is enabled but the operator does not supply explicit
+/// static peers or a rendezvous namespace.
+pub const DEFAULT_P2P_STATIC_PEERS: &[&str] = &[
+    "/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+    "/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+    "/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Z8xhkQGHmC1vuyTMV2EZHcBA9vAnp",
+    "/dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8bJTVZTMx65DvphQss9bM2Ds9M",
+    "/dns4/node0.preload.ipfs.io/tcp/443/wss/p2p/QmZMxNppxQJEGaQ4x8LuBfM1cT1jpLPmyWEfwoKxEN9McD",
+    "/dns4/node1.preload.ipfs.io/tcp/443/wss/p2p/Qmbut9Ywz9YEDrz8ySBJg9W7BnTWiFVF5B6BiBBdKQVbbS",
+    "/dns4/node2.preload.ipfs.io/tcp/443/wss/p2p/QmV7gnDfVqKR6A6f7YiNeuH5wivX1iYsM5gWXp3DoYpP9U",
+    "/dns4/node3.preload.ipfs.io/tcp/443/wss/p2p/QmY7JB6MqXhM8fBTBjHnm8JUE1RPzYOyw2CgYb6e8mKjru",
+];
+
+/// Return a copy of the default P2P static bootstrap peers.
+pub fn default_p2p_static_peers() -> Vec<String> {
+    DEFAULT_P2P_STATIC_PEERS.iter().map(|&s| s.to_string()).collect()
+}
 
 /// Errors returned by the p2p primitive validators.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -314,18 +333,22 @@ pub fn validate_peer_address(value: String) -> Result<String, P2pPrimitiveError>
         return Err(P2pPrimitiveError::InvalidPeerAddress);
     }
 
-    let parts: Vec<&str> = value.split('/').skip(1).collect();
-    if parts.len() < MIN_MULTIADDR_COMPONENTS || parts.len() % 2 != 0 {
-        return Err(P2pPrimitiveError::InvalidPeerAddress);
-    }
-    if parts.chunks_exact(2).any(|pair| pair[0].is_empty() || pair[1].is_empty()) {
-        return Err(P2pPrimitiveError::InvalidPeerAddress);
-    }
-    if parts[parts.len() - 2] != "p2p" {
+    // Reject empty path segments, e.g. "//" or a trailing "/".
+    if value.split('/').skip(1).any(|part| part.is_empty()) {
         return Err(P2pPrimitiveError::InvalidPeerAddress);
     }
 
-    validate_peer_id(parts[parts.len() - 1].to_string())?;
+    // The address must end with /p2p/<peer-id>. We extract the peer id from the
+    // final occurrence so that value-bearing and singleton protocols before the
+    // suffix are both accepted (e.g. /dnsaddr/.../p2p/... or /.../wss/p2p/...).
+    let (prefix, peer_id) = value.rsplit_once("/p2p/").ok_or(P2pPrimitiveError::InvalidPeerAddress)?;
+    validate_peer_id(peer_id.to_string())?;
+
+    // There must be at least one protocol before the /p2p/<peer-id> suffix.
+    if prefix == "/" {
+        return Err(P2pPrimitiveError::InvalidPeerAddress);
+    }
+
     Ok(value)
 }
 
@@ -393,6 +416,21 @@ mod tests {
             address.as_str(),
             "/dns4/bootstrap.example.com/tcp/4001/p2p/12D3KooWHybridPeerIdentityExample"
         );
+    }
+
+    #[test]
+    fn p2p_primitives_accept_dnsaddr_and_wss_bootstrap_addresses() {
+        PeerAddress::new("/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN")
+            .expect("dnsaddr bootstrap address should be valid");
+        PeerAddress::new("/dns4/node0.preload.ipfs.io/tcp/443/wss/p2p/QmZMxNppxQJEGaQ4x8LuBfM1cT1jpLPmyWEfwoKxEN9McD")
+            .expect("wss bootstrap address should be valid");
+    }
+
+    #[test]
+    fn p2p_primitives_default_static_peers_are_valid() {
+        for addr in default_p2p_static_peers() {
+            PeerAddress::new(addr).expect("default static peer should be valid");
+        }
     }
 
     #[test]
