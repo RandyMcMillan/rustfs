@@ -1517,7 +1517,8 @@ pub struct TlsInspectOpts {
 P2P networking environment (experimental):
   RUSTFS_P2P_ENABLED=true|false                Enable experimental peer-to-peer networking layer (default: false)
   RUSTFS_P2P_NODE_NAME=<name>                  Local node name advertised to P2P peers
-  RUSTFS_P2P_PEER_ID=<peer-id>                 Local libp2p peer identity
+  RUSTFS_P2P_PEER_ID=<peer-id>                 Expected local libp2p peer identity (optional; derived from key file or generated)
+  RUSTFS_P2P_KEY_FILE=<path>                   Path to a protobuf-encoded libp2p identity key file (optional; ephemeral key if omitted)
   RUSTFS_P2P_STATIC_PEERS=<addr1,addr2>        Comma-separated bootstrap multiaddrs ending with /p2p/<peer-id>
   RUSTFS_P2P_RENDEZVOUS_NAMESPACE=<ns>         Optional rendezvous namespace for discovery
   RUSTFS_P2P_RETRY_INTERVAL_SECS=30            Bootstrap retry interval in seconds
@@ -1662,9 +1663,15 @@ pub struct ServerOpts {
     #[arg(long, env = "RUSTFS_P2P_NODE_NAME")]
     pub p2p_node_name: Option<String>,
 
-    /// Local libp2p peer identity.
+    /// Expected local libp2p peer identity. If omitted, the identity is derived
+    /// from the key file or generated at startup.
     #[arg(long, env = "RUSTFS_P2P_PEER_ID")]
     pub p2p_peer_id: Option<String>,
+
+    /// Path to a protobuf-encoded libp2p identity key file. If omitted, an
+    /// ephemeral key is generated and the peer id will change on restart.
+    #[arg(long, env = "RUSTFS_P2P_KEY_FILE")]
+    pub p2p_key_file: Option<PathBuf>,
 
     /// Static P2P bootstrap peer multiaddrs (comma-separated).
     #[arg(
@@ -1769,6 +1776,7 @@ pub fn default_server_opts() -> ServerOpts {
         p2p_enabled: false,
         p2p_node_name: None,
         p2p_peer_id: None,
+        p2p_key_file: None,
         p2p_static_peers: vec![],
         p2p_rendezvous_namespace: None,
         p2p_retry_interval_secs: 30,

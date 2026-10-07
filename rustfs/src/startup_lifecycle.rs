@@ -136,6 +136,8 @@ pub(crate) async fn run_startup_runtime_lifecycle(lifecycle: StartupRuntimeLifec
         local_trace_capture,
         p2p_bootstrap,
         p2p_config,
+        #[cfg(feature = "p2p")]
+        p2p_runtime,
         iam_bootstrap,
         enable_scanner,
     } = service_runtime;
@@ -174,6 +176,10 @@ pub(crate) async fn run_startup_runtime_lifecycle(lifecycle: StartupRuntimeLifec
     .await;
     shutdown_connect_runtimes(heartbeat, inventory).await;
     if let Some(runtime) = local_trace_capture {
+        runtime.shutdown().await;
+    }
+    #[cfg(feature = "p2p")]
+    if let Some(runtime) = p2p_runtime {
         runtime.shutdown().await;
     }
     if let Some(cleanup) = scanner_cleanup {

@@ -24,6 +24,7 @@ use rustfs_config::{
 };
 use rustfs_credentials::{DEFAULT_ACCESS_KEY, DEFAULT_SECRET_KEY, Masked};
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
 /// Raw P2P configuration as supplied by CLI/environment.
@@ -36,6 +37,7 @@ pub struct P2pStartupConfig {
     pub enabled: bool,
     pub node_name: Option<String>,
     pub peer_id: Option<String>,
+    pub key_file: Option<PathBuf>,
     pub static_peers: Vec<String>,
     pub rendezvous_namespace: Option<String>,
     pub retry_interval_secs: u64,
@@ -48,6 +50,7 @@ impl P2pStartupConfig {
             enabled: false,
             node_name: None,
             peer_id: None,
+            key_file: None,
             static_peers: Vec::new(),
             rendezvous_namespace: None,
             retry_interval_secs: 30,
@@ -66,11 +69,9 @@ impl P2pStartupConfig {
             .ok_or_else(|| std::io::Error::other("p2p node name is required when P2P is enabled"))?;
         crate::p2p::validate_node_name(node_name.to_string()).map_err(std::io::Error::other)?;
 
-        let peer_id = self
-            .peer_id
-            .as_deref()
-            .ok_or_else(|| std::io::Error::other("p2p peer id is required when P2P is enabled"))?;
-        crate::p2p::PeerId::new(peer_id.to_string()).map_err(std::io::Error::other)?;
+        if let Some(peer_id) = self.peer_id.as_deref() {
+            crate::p2p::PeerId::new(peer_id.to_string()).map_err(std::io::Error::other)?;
+        }
 
         let mut seen = HashSet::with_capacity(self.static_peers.len());
         for addr in &self.static_peers {
@@ -292,6 +293,7 @@ impl Config {
             p2p_enabled,
             p2p_node_name,
             p2p_peer_id,
+            p2p_key_file,
             p2p_static_peers,
             p2p_rendezvous_namespace,
             p2p_retry_interval_secs,
@@ -320,6 +322,7 @@ impl Config {
             enabled: p2p_enabled,
             node_name: p2p_node_name,
             peer_id: p2p_peer_id,
+            key_file: p2p_key_file,
             static_peers: p2p_static_peers,
             rendezvous_namespace: p2p_rendezvous_namespace,
             retry_interval_secs: p2p_retry_interval_secs,

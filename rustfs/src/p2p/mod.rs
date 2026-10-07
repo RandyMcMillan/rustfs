@@ -4,6 +4,9 @@
 //! experimental peer-to-peer surface isolated here so the eventual hybrid
 //! bootstrap path can grow without disturbing the existing transport stack.
 
+#[cfg(feature = "p2p")]
+pub mod runtime;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt;
@@ -175,6 +178,9 @@ pub struct P2pConfig {
     enabled: bool,
     local_identity: Option<NodeIdentity>,
     bootstrap: Option<BootstrapConfig>,
+    /// Opaque protobuf encoding of the libp2p identity keypair. Empty when
+    /// P2P is disabled so the struct remains unconditional.
+    keypair_protobuf: Vec<u8>,
 }
 
 impl P2pConfig {
@@ -183,14 +189,16 @@ impl P2pConfig {
             enabled: false,
             local_identity: None,
             bootstrap: None,
+            keypair_protobuf: Vec::new(),
         }
     }
 
-    pub fn enabled(local_identity: NodeIdentity, bootstrap: BootstrapConfig) -> Self {
+    pub fn enabled(local_identity: NodeIdentity, bootstrap: BootstrapConfig, keypair_protobuf: Vec<u8>) -> Self {
         Self {
             enabled: true,
             local_identity: Some(local_identity),
             bootstrap: Some(bootstrap),
+            keypair_protobuf,
         }
     }
 
@@ -206,15 +214,22 @@ impl P2pConfig {
         self.bootstrap.as_ref()
     }
 
+    pub fn keypair_protobuf(&self) -> &[u8] {
+        &self.keypair_protobuf
+    }
+
     pub fn validate(&self) -> Result<(), P2pPrimitiveError> {
-        if self.enabled != self.local_identity.is_some() || self.enabled != self.bootstrap.is_some() {
+        let has_identity = self.local_identity.is_some();
+        let has_bootstrap = self.bootstrap.is_some();
+        let has_keypair = !self.keypair_protobuf.is_empty();
+        if self.enabled != has_identity || self.enabled != has_bootstrap || self.enabled != has_keypair {
             return Err(P2pPrimitiveError::InvalidConfigState);
         }
         Ok(())
     }
 
-    /// Build an enabled config from raw CLI/environment values and a resolved
-    /// deployment identity. Used by startup after the AppContext is published.
+    /// Build an enabled config from raw CLI/environment values, a resolved
+    /// deployment identity, and the protobuf-encoded libp2p keypair.
     pub fn from_deployment_and_config(
         deployment_id: Uuid,
         node_name: impl Into<String>,
@@ -223,6 +238,7 @@ impl P2pConfig {
         rendezvous_namespace: Option<String>,
         retry_interval_secs: u64,
         max_bootstrap_peers: usize,
+        keypair_protobuf: Vec<u8>,
     ) -> Result<Self, P2pPrimitiveError> {
         let identity = NodeIdentity::new(deployment_id, node_name, PeerId::new(peer_id)?)?;
         let peers = static_peers
@@ -230,7 +246,7 @@ impl P2pConfig {
             .map(PeerAddress::new)
             .collect::<Result<Vec<_>, _>>()?;
         let bootstrap = BootstrapConfig::new(peers, rendezvous_namespace, retry_interval_secs, max_bootstrap_peers)?;
-        Ok(Self::enabled(identity, bootstrap))
+        Ok(Self::enabled(identity, bootstrap, keypair_protobuf))
     }
 }
 
@@ -466,10 +482,11 @@ mod tests {
         )
         .expect("bootstrap");
 
-        let config = P2pConfig::enabled(identity, bootstrap);
+        let config = P2pConfig::enabled(identity, bootstrap, vec![1, 2, 3]);
         assert!(config.is_enabled());
         assert!(config.local_identity().is_some());
         assert!(config.bootstrap().is_some());
+        assert_eq!(!config.keypair_protobuf().is_empty(), true);
         assert_eq!(validate_p2p_config(config).expect("valid config").is_enabled(), true);
     }
 
@@ -509,6 +526,7 @@ mod tests {
             enabled: true,
             local_identity: None,
             bootstrap: None,
+            keypair_protobuf: Vec::new(),
         })
         .expect_err("invalid state");
         assert_eq!(err, P2pPrimitiveError::InvalidConfigState);
@@ -525,6 +543,7 @@ mod tests {
             Some("rustfs".to_string()),
             5,
             8,
+            vec![1, 2, 3],
         )
         .expect("valid p2p config");
 
@@ -550,6 +569,7 @@ mod tests {
             Some("rustfs".to_string()),
             5,
             8,
+            vec![1, 2, 3],
         )
         .expect_err("nil deployment id should fail");
         assert_eq!(err, P2pPrimitiveError::NilDeploymentId);

@@ -50,6 +50,8 @@ pub(crate) struct StartupServiceRuntime {
     pub(crate) local_trace_capture: Option<LocalTraceCaptureRuntime>,
     pub(crate) p2p_bootstrap: Option<crate::storage::storage_api::ecstore_cluster::ClusterP2pBootstrapSnapshot>,
     pub(crate) p2p_config: Option<crate::p2p::P2pConfig>,
+    #[cfg(feature = "p2p")]
+    pub(crate) p2p_runtime: Option<crate::p2p::runtime::P2pRuntime>,
     pub(crate) iam_bootstrap: IamBootstrapDisposition,
     pub(crate) enable_scanner: bool,
 }
@@ -108,28 +110,9 @@ pub(crate) async fn init_startup_runtime_services(
     let p2p_bootstrap = Some(crate::storage::storage_api::ecstore_cluster::p2p_bootstrap_snapshot_from_endpoint_pools(
         &endpoint_pools,
     ));
-    let p2p_config = if config.p2p.enabled {
-        let deployment_id = crate::app::context::resolve_deployment_id()
-            .ok_or_else(|| std::io::Error::other("p2p is enabled but no deployment id is available"))?;
-        let deployment_id = Uuid::parse_str(&deployment_id)
-            .map_err(|err| std::io::Error::other(format!("invalid deployment id for p2p: {err}")))?;
-        let node_name = config.p2p.node_name.clone().unwrap_or_default();
-        let peer_id = config.p2p.peer_id.clone().unwrap_or_default();
-        Some(
-            crate::p2p::P2pConfig::from_deployment_and_config(
-                deployment_id,
-                node_name,
-                peer_id,
-                config.p2p.static_peers.clone(),
-                config.p2p.rendezvous_namespace.clone(),
-                config.p2p.retry_interval_secs,
-                config.p2p.max_bootstrap_peers,
-            )
-            .map_err(std::io::Error::other)?,
-        )
-    } else {
-        None
-    };
+    let p2p_config = build_p2p_config(config)?;
+    #[cfg(feature = "p2p")]
+    let p2p_runtime = crate::p2p::runtime::P2pRuntime::start(p2p_config.clone(), &ctx)?;
 
     // Audit initialization requires the AppContext (server config + object store)
     // which is published by ensure_startup_after_iam inside init_iam_runtime.
@@ -153,6 +136,8 @@ pub(crate) async fn init_startup_runtime_services(
         local_trace_capture,
         p2p_bootstrap,
         p2p_config,
+        #[cfg(feature = "p2p")]
+        p2p_runtime,
         iam_bootstrap,
         enable_scanner,
     })
@@ -178,6 +163,81 @@ fn start_heartbeat_runtime(
 
 fn startup_heartbeat_error(error: HeartbeatError) -> std::io::Error {
     std::io::Error::other(heartbeat_failure_reason(&error))
+}
+
+#[cfg(feature = "p2p")]
+fn build_p2p_config(config: &Config) -> std::io::Result<Option<crate::p2p::P2pConfig>> {
+    let p2p = &config.p2p;
+    if !p2p.enabled {
+        return Ok(None);
+    }
+
+    let deployment_id = crate::storage::storage_api::get_global_deployment_id()
+        .and_then(|s| Uuid::parse_str(&s).ok())
+        .ok_or_else(|| std::io::Error::other("p2p enabled but deployment id is not available"))?;
+
+    let node_name = p2p
+        .node_name
+        .clone()
+        .ok_or_else(|| std::io::Error::other("p2p enabled but node name is missing; this should have been validated"))?;
+
+    let keypair = match &p2p.key_file {
+        Some(path) => {
+            let bytes = std::fs::read(path)?;
+            libp2p::identity::Keypair::from_protobuf_encoding(&bytes)
+                .map_err(|err| std::io::Error::other(format!("failed to load p2p key file: {err}")))?
+        }
+        None => {
+            tracing::warn!(
+                target: "rustfs::p2p",
+                event = "p2p_ephemeral_key",
+                component = "p2p",
+                subsystem = "startup",
+                "P2P enabled without --p2p-key-file; generating an ephemeral identity that will change on restart"
+            );
+            libp2p::identity::Keypair::generate_ed25519()
+        }
+    };
+
+    let computed_peer_id = keypair.public().to_peer_id().to_string();
+    if let Some(expected) = &p2p.peer_id {
+        if expected != &computed_peer_id {
+            return Err(std::io::Error::other(format!(
+                "p2p peer id mismatch: configured {expected} but key file corresponds to {computed_peer_id}"
+            )));
+        }
+    }
+
+    let keypair_protobuf = keypair
+        .to_protobuf_encoding()
+        .map_err(|err| std::io::Error::other(format!("failed to encode p2p keypair: {err}")))?;
+
+    crate::p2p::P2pConfig::from_deployment_and_config(
+        deployment_id,
+        node_name,
+        computed_peer_id,
+        p2p.static_peers.clone(),
+        p2p.rendezvous_namespace.clone(),
+        p2p.retry_interval_secs,
+        p2p.max_bootstrap_peers,
+        keypair_protobuf,
+    )
+    .map(Some)
+    .map_err(|err| std::io::Error::other(format!("invalid p2p config: {err}")))
+}
+
+#[cfg(not(feature = "p2p"))]
+fn build_p2p_config(config: &Config) -> std::io::Result<Option<crate::p2p::P2pConfig>> {
+    if config.p2p.enabled {
+        tracing::warn!(
+            target: "rustfs::p2p",
+            event = "p2p_feature_disabled",
+            component = "p2p",
+            subsystem = "startup",
+            "P2P is enabled in configuration but the p2p feature was not compiled in; P2P will remain disabled"
+        );
+    }
+    Ok(None)
 }
 
 fn start_inventory_runtime(

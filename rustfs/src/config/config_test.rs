@@ -1014,16 +1014,40 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_p2p_enabled_requires_node_name_and_peer_id() {
+    fn test_p2p_enabled_requires_node_name() {
         let args = vec!["rustfs", "/data/vol1", "--p2p-enabled"];
         let err = Config::from_opt(Opt::parse_from(args)).expect_err("enabled p2p without identity should fail");
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
         assert!(err.to_string().contains("node name"));
+    }
 
+    #[test]
+    #[serial]
+    fn test_p2p_enabled_allows_missing_peer_id() {
         let args = vec!["rustfs", "/data/vol1", "--p2p-enabled", "--p2p-node-name", "node-a"];
-        let err = Config::from_opt(Opt::parse_from(args)).expect_err("enabled p2p without peer id should fail");
-        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
-        assert!(err.to_string().contains("peer id"));
+        let config = Config::from_opt(Opt::parse_from(args)).expect("config should parse without peer id");
+
+        assert!(config.p2p.enabled);
+        assert_eq!(config.p2p.node_name.as_deref(), Some("node-a"));
+        assert_eq!(config.p2p.peer_id, None);
+        assert!(!config.p2p.static_peers.is_empty());
+    }
+
+    #[test]
+    #[serial]
+    fn test_p2p_key_file_parses() {
+        let args = vec![
+            "rustfs",
+            "/data/vol1",
+            "--p2p-enabled",
+            "--p2p-node-name",
+            "node-a",
+            "--p2p-key-file",
+            "/etc/rustfs/p2p.key",
+        ];
+        let config = Config::from_opt(Opt::parse_from(args)).expect("config should parse");
+
+        assert_eq!(config.p2p.key_file.as_deref(), Some(std::path::Path::new("/etc/rustfs/p2p.key")));
     }
 
     #[test]
