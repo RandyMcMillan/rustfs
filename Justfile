@@ -52,6 +52,8 @@ pre-commit: fmt clippy check test
 [group("🤔 Git")]
 setup-hooks:
     @echo "🔧 Setting up git hooks..."
+    mkdir -p .git/hooks
+    cp ./githooks/* .git/hooks/
     chmod +x .git/hooks/pre-commit
     @echo "✅ Git hooks setup complete!"
 
