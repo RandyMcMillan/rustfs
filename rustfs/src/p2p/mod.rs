@@ -193,6 +193,26 @@ impl P2pConfig {
         }
         Ok(())
     }
+
+    /// Build an enabled config from raw CLI/environment values and a resolved
+    /// deployment identity. Used by startup after the AppContext is published.
+    pub fn from_deployment_and_config(
+        deployment_id: Uuid,
+        node_name: impl Into<String>,
+        peer_id: impl Into<String>,
+        static_peers: Vec<String>,
+        rendezvous_namespace: Option<String>,
+        retry_interval_secs: u64,
+        max_bootstrap_peers: usize,
+    ) -> Result<Self, P2pPrimitiveError> {
+        let identity = NodeIdentity::new(deployment_id, node_name, PeerId::new(peer_id)?)?;
+        let peers = static_peers
+            .into_iter()
+            .map(PeerAddress::new)
+            .collect::<Result<Vec<_>, _>>()?;
+        let bootstrap = BootstrapConfig::new(peers, rendezvous_namespace, retry_interval_secs, max_bootstrap_peers)?;
+        Ok(Self::enabled(identity, bootstrap))
+    }
 }
 
 impl Default for P2pConfig {
@@ -454,5 +474,46 @@ mod tests {
         })
         .expect_err("invalid state");
         assert_eq!(err, P2pPrimitiveError::InvalidConfigState);
+    }
+
+    #[test]
+    fn p2p_config_from_deployment_and_config_builds_enabled_config() {
+        let deployment_id = Uuid::new_v4();
+        let config = P2pConfig::from_deployment_and_config(
+            deployment_id,
+            "node-a",
+            "12D3KooWHybridPeerIdentityExample",
+            vec!["/dns4/bootstrap.example.com/tcp/4001/p2p/12D3KooWHybridPeerIdentityExample".to_string()],
+            Some("rustfs".to_string()),
+            5,
+            8,
+        )
+        .expect("valid p2p config");
+
+        assert!(config.is_enabled());
+        let identity = config.local_identity().expect("identity");
+        assert_eq!(identity.deployment_id(), deployment_id);
+        assert_eq!(identity.node_name(), "node-a");
+        assert_eq!(identity.peer_id().as_str(), "12D3KooWHybridPeerIdentityExample");
+        let bootstrap = config.bootstrap().expect("bootstrap");
+        assert_eq!(bootstrap.static_peers().len(), 1);
+        assert_eq!(bootstrap.rendezvous_namespace(), Some("rustfs"));
+        assert_eq!(bootstrap.retry_interval_secs(), 5);
+        assert_eq!(bootstrap.max_bootstrap_peers(), 8);
+    }
+
+    #[test]
+    fn p2p_config_from_deployment_and_config_rejects_nil_deployment_id() {
+        let err = P2pConfig::from_deployment_and_config(
+            Uuid::nil(),
+            "node-a",
+            "12D3KooWHybridPeerIdentityExample",
+            vec![],
+            Some("rustfs".to_string()),
+            5,
+            8,
+        )
+        .expect_err("nil deployment id should fail");
+        assert_eq!(err, P2pPrimitiveError::NilDeploymentId);
     }
 }

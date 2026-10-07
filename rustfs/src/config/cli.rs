@@ -1512,7 +1512,16 @@ pub struct TlsInspectOpts {
   RUSTFS_ALLOCATOR_RECLAIM_ENABLED=true|false  Enable allocator page reclaim after idle samples (default: true)
   RUSTFS_ALLOCATOR_RECLAIM_INTERVAL_SECS=30    Sampling interval in seconds
   RUSTFS_ALLOCATOR_RECLAIM_FORCE=true|false    Request forceful collection when supported
-  RUSTFS_ALLOCATOR_RECLAIM_IDLE_INTERVALS=3    Consecutive idle samples required before reclaim")]
+  RUSTFS_ALLOCATOR_RECLAIM_IDLE_INTERVALS=3    Consecutive idle samples required before reclaim
+
+P2P networking environment (experimental):
+  RUSTFS_P2P_ENABLED=true|false                Enable experimental peer-to-peer networking layer (default: false)
+  RUSTFS_P2P_NODE_NAME=<name>                  Local node name advertised to P2P peers
+  RUSTFS_P2P_PEER_ID=<peer-id>                 Local libp2p peer identity
+  RUSTFS_P2P_STATIC_PEERS=<addr1,addr2>        Comma-separated bootstrap multiaddrs ending with /p2p/<peer-id>
+  RUSTFS_P2P_RENDEZVOUS_NAMESPACE=<ns>         Optional rendezvous namespace for discovery
+  RUSTFS_P2P_RETRY_INTERVAL_SECS=30            Bootstrap retry interval in seconds
+  RUSTFS_P2P_MAX_BOOTSTRAP_PEERS=16            Maximum bootstrap peers to track")]
 pub struct ServerOpts {
     /// DIR points to a directory on a filesystem.
     #[arg(
@@ -1644,6 +1653,39 @@ pub struct ServerOpts {
     /// Options: GeneralPurpose, AiTraining, DataAnalytics, WebWorkload, IndustrialIoT, SecureStorage
     #[arg(long, default_value_t = rustfs_config::DEFAULT_BUFFER_PROFILE.to_string(), env = "RUSTFS_BUFFER_PROFILE")]
     pub buffer_profile: String,
+
+    /// Enable experimental peer-to-peer networking layer.
+    #[arg(long, default_value_t = false, env = "RUSTFS_P2P_ENABLED")]
+    pub p2p_enabled: bool,
+
+    /// Local node name advertised to P2P peers.
+    #[arg(long, env = "RUSTFS_P2P_NODE_NAME")]
+    pub p2p_node_name: Option<String>,
+
+    /// Local libp2p peer identity.
+    #[arg(long, env = "RUSTFS_P2P_PEER_ID")]
+    pub p2p_peer_id: Option<String>,
+
+    /// Static P2P bootstrap peer multiaddrs (comma-separated).
+    #[arg(
+        long,
+        env = "RUSTFS_P2P_STATIC_PEERS",
+        value_delimiter = ',',
+        value_parser = NonEmptyStringValueParser::new()
+    )]
+    pub p2p_static_peers: Vec<String>,
+
+    /// Optional rendezvous namespace for P2P discovery.
+    #[arg(long, env = "RUSTFS_P2P_RENDEZVOUS_NAMESPACE")]
+    pub p2p_rendezvous_namespace: Option<String>,
+
+    /// Bootstrap retry interval in seconds.
+    #[arg(long, default_value_t = 30, env = "RUSTFS_P2P_RETRY_INTERVAL_SECS")]
+    pub p2p_retry_interval_secs: u64,
+
+    /// Maximum number of P2P bootstrap peers to track.
+    #[arg(long, default_value_t = 16, env = "RUSTFS_P2P_MAX_BOOTSTRAP_PEERS")]
+    pub p2p_max_bootstrap_peers: usize,
 }
 
 /// Result of parsing command line arguments
@@ -1724,6 +1766,13 @@ pub fn default_server_opts() -> ServerOpts {
         kms_allow_insecure_dev_defaults: false,
         buffer_profile_disable: false,
         buffer_profile: "GeneralPurpose".to_string(),
+        p2p_enabled: false,
+        p2p_node_name: None,
+        p2p_peer_id: None,
+        p2p_static_peers: vec![],
+        p2p_rendezvous_namespace: None,
+        p2p_retry_interval_secs: 30,
+        p2p_max_bootstrap_peers: 16,
     }
 }
 

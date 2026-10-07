@@ -79,6 +79,7 @@ pub use cli::{DiagnoseFormat, DiagnoseOpts};
 pub use cli::{InspectBucketMetaOpts, InspectCommands, InspectOpts};
 pub use cli::{TlsCommands, TlsInspectOpts, TlsOpts};
 pub use config_struct::Config;
+pub use config_struct::P2pStartupConfig;
 pub use info::execute_info;
 pub use opt::Opt;
 pub(crate) use snapshot::get_config_snapshot;

@@ -37,6 +37,7 @@ use crate::{
 use rustfs_common::GlobalReadiness;
 use std::{collections::BTreeSet, io::Result, sync::Arc};
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
 const EVENT_DRIVE_UNAVAILABLE: &str = "drive_unavailable";
 const LOG_COMPONENT_CONNECT: &str = "connect";
@@ -48,6 +49,7 @@ pub(crate) struct StartupServiceRuntime {
     pub(crate) inventory: Option<InventoryRuntime>,
     pub(crate) local_trace_capture: Option<LocalTraceCaptureRuntime>,
     pub(crate) p2p_bootstrap: Option<crate::storage::storage_api::ecstore_cluster::ClusterP2pBootstrapSnapshot>,
+    pub(crate) p2p_config: Option<crate::p2p::P2pConfig>,
     pub(crate) iam_bootstrap: IamBootstrapDisposition,
     pub(crate) enable_scanner: bool,
 }
@@ -106,6 +108,28 @@ pub(crate) async fn init_startup_runtime_services(
     let p2p_bootstrap = Some(crate::storage::storage_api::ecstore_cluster::p2p_bootstrap_snapshot_from_endpoint_pools(
         &endpoint_pools,
     ));
+    let p2p_config = if config.p2p.enabled {
+        let deployment_id = crate::app::context::resolve_deployment_id()
+            .ok_or_else(|| std::io::Error::other("p2p is enabled but no deployment id is available"))?;
+        let deployment_id = Uuid::parse_str(&deployment_id)
+            .map_err(|err| std::io::Error::other(format!("invalid deployment id for p2p: {err}")))?;
+        let node_name = config.p2p.node_name.clone().unwrap_or_default();
+        let peer_id = config.p2p.peer_id.clone().unwrap_or_default();
+        Some(
+            crate::p2p::P2pConfig::from_deployment_and_config(
+                deployment_id,
+                node_name,
+                peer_id,
+                config.p2p.static_peers.clone(),
+                config.p2p.rendezvous_namespace.clone(),
+                config.p2p.retry_interval_secs,
+                config.p2p.max_bootstrap_peers,
+            )
+            .map_err(std::io::Error::other)?,
+        )
+    } else {
+        None
+    };
 
     // Audit initialization requires the AppContext (server config + object store)
     // which is published by ensure_startup_after_iam inside init_iam_runtime.
@@ -128,6 +152,7 @@ pub(crate) async fn init_startup_runtime_services(
         inventory,
         local_trace_capture,
         p2p_bootstrap,
+        p2p_config,
         iam_bootstrap,
         enable_scanner,
     })

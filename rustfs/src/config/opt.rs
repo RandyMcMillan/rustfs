@@ -55,6 +55,13 @@ pub struct Opt {
     pub kms_allow_insecure_dev_defaults: bool,
     pub buffer_profile_disable: bool,
     pub buffer_profile: String,
+    pub p2p_enabled: bool,
+    pub p2p_node_name: Option<String>,
+    pub p2p_peer_id: Option<String>,
+    pub p2p_static_peers: Vec<String>,
+    pub p2p_rendezvous_namespace: Option<String>,
+    pub p2p_retry_interval_secs: u64,
+    pub p2p_max_bootstrap_peers: usize,
 }
 
 impl Opt {
@@ -85,6 +92,13 @@ impl Opt {
             kms_allow_insecure_dev_defaults: o.kms_allow_insecure_dev_defaults,
             buffer_profile_disable: o.buffer_profile_disable,
             buffer_profile: o.buffer_profile,
+            p2p_enabled: o.p2p_enabled,
+            p2p_node_name: o.p2p_node_name,
+            p2p_peer_id: o.p2p_peer_id,
+            p2p_static_peers: o.p2p_static_peers,
+            p2p_rendezvous_namespace: o.p2p_rendezvous_namespace,
+            p2p_retry_interval_secs: o.p2p_retry_interval_secs,
+            p2p_max_bootstrap_peers: o.p2p_max_bootstrap_peers,
         }
     }
 

@@ -26,6 +26,78 @@ use rustfs_credentials::{DEFAULT_ACCESS_KEY, DEFAULT_SECRET_KEY, Masked};
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
 
+/// Raw P2P configuration as supplied by CLI/environment.
+///
+/// The deployment identity is not available at parse time, so the final
+/// `crate::p2p::P2pConfig` is built during startup once the AppContext is
+/// published.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct P2pStartupConfig {
+    pub enabled: bool,
+    pub node_name: Option<String>,
+    pub peer_id: Option<String>,
+    pub static_peers: Vec<String>,
+    pub rendezvous_namespace: Option<String>,
+    pub retry_interval_secs: u64,
+    pub max_bootstrap_peers: usize,
+}
+
+impl P2pStartupConfig {
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            node_name: None,
+            peer_id: None,
+            static_peers: Vec::new(),
+            rendezvous_namespace: None,
+            retry_interval_secs: 30,
+            max_bootstrap_peers: 16,
+        }
+    }
+
+    pub fn validate(&self) -> std::io::Result<()> {
+        if !self.enabled {
+            return Ok(());
+        }
+
+        let node_name = self
+            .node_name
+            .as_deref()
+            .ok_or_else(|| std::io::Error::other("p2p node name is required when P2P is enabled"))?;
+        crate::p2p::validate_node_name(node_name.to_string()).map_err(std::io::Error::other)?;
+
+        let peer_id = self
+            .peer_id
+            .as_deref()
+            .ok_or_else(|| std::io::Error::other("p2p peer id is required when P2P is enabled"))?;
+        crate::p2p::PeerId::new(peer_id.to_string()).map_err(std::io::Error::other)?;
+
+        let mut seen = HashSet::with_capacity(self.static_peers.len());
+        for addr in &self.static_peers {
+            let peer = crate::p2p::PeerAddress::new(addr.clone()).map_err(std::io::Error::other)?;
+            if !seen.insert(peer.as_str().to_owned()) {
+                return Err(std::io::Error::other("p2p static peers must be unique"));
+            }
+        }
+
+        if self.retry_interval_secs == 0 {
+            return Err(std::io::Error::other("p2p retry interval must be non-zero"));
+        }
+        if self.max_bootstrap_peers == 0 {
+            return Err(std::io::Error::other("p2p max bootstrap peers must be non-zero"));
+        }
+        if self.static_peers.len() > self.max_bootstrap_peers {
+            return Err(std::io::Error::other("p2p static peer count exceeds max bootstrap peers"));
+        }
+
+        if let Some(namespace) = self.rendezvous_namespace.as_deref() {
+            crate::p2p::validate_rendezvous_namespace(namespace.to_string()).map_err(std::io::Error::other)?;
+        }
+
+        Ok(())
+    }
+}
+
 pub(crate) const LEGACY_ENV_RUSTFS_ROOT_USER: &str = "RUSTFS_ROOT_USER";
 pub(crate) const LEGACY_ENV_RUSTFS_ROOT_PASSWORD: &str = "RUSTFS_ROOT_PASSWORD";
 static LEGACY_CREDENTIAL_WARNED_KEYS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
@@ -148,6 +220,9 @@ pub struct Config {
 
     /// Workload profile for adaptive buffer sizing
     pub buffer_profile: String,
+
+    /// Experimental peer-to-peer networking configuration.
+    pub p2p: P2pStartupConfig,
 }
 
 impl Config {
@@ -179,6 +254,7 @@ impl Config {
             kms_allow_insecure_dev_defaults: false,
             buffer_profile_disable: false,
             buffer_profile: "GeneralPurpose".to_string(),
+            p2p: P2pStartupConfig::disabled(),
         }
     }
 
@@ -213,6 +289,13 @@ impl Config {
             kms_allow_insecure_dev_defaults,
             buffer_profile_disable,
             buffer_profile,
+            p2p_enabled,
+            p2p_node_name,
+            p2p_peer_id,
+            p2p_static_peers,
+            p2p_rendezvous_namespace,
+            p2p_retry_interval_secs,
+            p2p_max_bootstrap_peers,
         } = opt;
 
         let access_key = resolve_credential(
@@ -232,6 +315,17 @@ impl Config {
 
         // Region is optional, but if not set, we should default to "us-east-1" for signing compatibility with AWS S3 clients
         let region = region.or_else(|| Some(RUSTFS_REGION.to_string()));
+
+        let p2p = P2pStartupConfig {
+            enabled: p2p_enabled,
+            node_name: p2p_node_name,
+            peer_id: p2p_peer_id,
+            static_peers: p2p_static_peers,
+            rendezvous_namespace: p2p_rendezvous_namespace,
+            retry_interval_secs: p2p_retry_interval_secs,
+            max_bootstrap_peers: p2p_max_bootstrap_peers,
+        };
+        p2p.validate()?;
 
         Ok(Config {
             volumes,
@@ -256,6 +350,7 @@ impl Config {
             kms_allow_insecure_dev_defaults,
             buffer_profile_disable,
             buffer_profile,
+            p2p,
         })
     }
 
@@ -299,6 +394,7 @@ impl std::fmt::Debug for Config {
             .field("kms_allow_insecure_dev_defaults", &self.kms_allow_insecure_dev_defaults)
             .field("buffer_profile_disable", &self.buffer_profile_disable)
             .field("buffer_profile", &self.buffer_profile)
+            .field("p2p", &self.p2p)
             .finish()
     }
 }

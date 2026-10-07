@@ -916,4 +916,134 @@ mod tests {
             });
         });
     }
+
+    #[test]
+    fn test_default_p2p_configuration() {
+        let config = Config::new("127.0.0.1:9000", vec!["/data/vol1".to_string()]);
+
+        assert!(!config.p2p.enabled);
+        assert_eq!(config.p2p.node_name, None);
+        assert_eq!(config.p2p.peer_id, None);
+        assert!(config.p2p.static_peers.is_empty());
+        assert_eq!(config.p2p.rendezvous_namespace, None);
+        assert_eq!(config.p2p.retry_interval_secs, 30);
+        assert_eq!(config.p2p.max_bootstrap_peers, 16);
+    }
+
+    #[test]
+    #[serial]
+    fn test_p2p_enabled_via_cli() {
+        let args = vec![
+            "rustfs",
+            "/data/vol1",
+            "--p2p-enabled",
+            "--p2p-node-name",
+            "node-a",
+            "--p2p-peer-id",
+            "12D3KooWHybridPeerIdentityExample",
+            "--p2p-static-peer",
+            "/dns4/bootstrap.example.com/tcp/4001/p2p/12D3KooWHybridPeerIdentityExample",
+            "--p2p-rendezvous-namespace",
+            "rustfs",
+            "--p2p-retry-interval-secs",
+            "60",
+            "--p2p-max-bootstrap-peers",
+            "8",
+        ];
+        let config = Config::from_opt(Opt::parse_from(args)).expect("config should parse");
+
+        assert!(config.p2p.enabled);
+        assert_eq!(config.p2p.node_name.as_deref(), Some("node-a"));
+        assert_eq!(config.p2p.peer_id.as_deref(), Some("12D3KooWHybridPeerIdentityExample"));
+        assert_eq!(config.p2p.static_peers.len(), 1);
+        assert_eq!(
+            config.p2p.static_peers[0],
+            "/dns4/bootstrap.example.com/tcp/4001/p2p/12D3KooWHybridPeerIdentityExample"
+        );
+        assert_eq!(config.p2p.rendezvous_namespace.as_deref(), Some("rustfs"));
+        assert_eq!(config.p2p.retry_interval_secs, 60);
+        assert_eq!(config.p2p.max_bootstrap_peers, 8);
+    }
+
+    #[test]
+    #[serial]
+    fn test_p2p_static_peers_env() {
+        temp_env::with_vars(
+            [
+                ("RUSTFS_VOLUMES", Some("/data/vol1")),
+                (
+                    "RUSTFS_P2P_STATIC_PEERS",
+                    Some(
+                        "/dns4/a.example.com/tcp/4001/p2p/12D3KooWHybridPeerIdentityExample,/dns4/b.example.com/tcp/4001/p2p/12D3KooWHybridPeerIdentityExample",
+                    ),
+                ),
+            ],
+            || {
+                let opt = Opt::parse_from(["rustfs"]);
+                assert_eq!(opt.p2p_static_peers.len(), 2);
+                assert_eq!(
+                    opt.p2p_static_peers[0],
+                    "/dns4/a.example.com/tcp/4001/p2p/12D3KooWHybridPeerIdentityExample"
+                );
+                assert_eq!(
+                    opt.p2p_static_peers[1],
+                    "/dns4/b.example.com/tcp/4001/p2p/12D3KooWHybridPeerIdentityExample"
+                );
+            },
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn test_p2p_enabled_requires_node_name_and_peer_id() {
+        let args = vec!["rustfs", "/data/vol1", "--p2p-enabled"];
+        let err = Config::from_opt(Opt::parse_from(args)).expect_err("enabled p2p without identity should fail");
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+        assert!(err.to_string().contains("node name"));
+
+        let args = vec!["rustfs", "/data/vol1", "--p2p-enabled", "--p2p-node-name", "node-a"];
+        let err = Config::from_opt(Opt::parse_from(args)).expect_err("enabled p2p without peer id should fail");
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+        assert!(err.to_string().contains("peer id"));
+    }
+
+    #[test]
+    #[serial]
+    fn test_p2p_rejects_duplicate_static_peers() {
+        let peer = "/dns4/bootstrap.example.com/tcp/4001/p2p/12D3KooWHybridPeerIdentityExample";
+        let args = vec![
+            "rustfs",
+            "/data/vol1",
+            "--p2p-enabled",
+            "--p2p-node-name",
+            "node-a",
+            "--p2p-peer-id",
+            "12D3KooWHybridPeerIdentityExample",
+            "--p2p-static-peer",
+            peer,
+            "--p2p-static-peer",
+            peer,
+        ];
+        let err = Config::from_opt(Opt::parse_from(args)).expect_err("duplicate static peers should fail");
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+        assert!(err.to_string().contains("unique"));
+    }
+
+    #[test]
+    #[serial]
+    fn test_p2p_rejects_invalid_static_peer_address() {
+        let args = vec![
+            "rustfs",
+            "/data/vol1",
+            "--p2p-enabled",
+            "--p2p-node-name",
+            "node-a",
+            "--p2p-peer-id",
+            "12D3KooWHybridPeerIdentityExample",
+            "--p2p-static-peer",
+            "/dns4/bootstrap.example.com/tcp/4001",
+        ];
+        let err = Config::from_opt(Opt::parse_from(args)).expect_err("invalid peer address should fail");
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    }
 }

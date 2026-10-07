@@ -24,7 +24,7 @@ deploy/data/*
 *jsonl
 .env
 .rustfs.sys
-.cargo/
+!.cargo/
 !fuzz/.cargo/
 !fuzz/.cargo/config.toml
 !.cargo/config.toml
